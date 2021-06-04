@@ -3,7 +3,7 @@
 
 def main():
     """Main function."""
-    pass
+    raise TypeError("This package is meant to be imported, not executed.")
 
 
 if __name__ == "__main__":
