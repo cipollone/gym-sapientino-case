@@ -3,6 +3,8 @@
 import random
 import time
 
+from gym.wrappers import TimeLimit
+
 from gym_sapientino_case.env import SapientinoCase
 
 
@@ -14,6 +16,9 @@ def main():
         colors=["red", "green", "blue", "yellow"],
         logdir=".",
     )
+
+    # Limit the length of the episode
+    env = TimeLimit(env, 100)
 
     # Episodes
     while True:

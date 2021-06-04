@@ -101,7 +101,10 @@ class SapientinoGoal(TemporalGoal):
     @staticmethod
     def _make_sapientino_automaton(colors: Sequence[str]) -> SimpleDFA:
         """Make the automaton from a sequence of colors."""
-        alphabet = set(map(frozenset, powerset(set(colors))))
+        # All possible interpretations
+        #  I don't consider those that would never happen to simplify the dfa
+        alphabet = {frozenset({c}) for c in colors}
+        alphabet.add(frozenset())
 
         nb_states = len(colors) + 2
         initial_state = 0
@@ -113,7 +116,9 @@ class SapientinoGoal(TemporalGoal):
         for c in colors:
             next_state = current_state + 1
             for symbol in alphabet:
-                if c in symbol:
+                if len(symbol) == 0:
+                    transitions.setdefault(current_state, {})[symbol] = current_state
+                elif c in symbol:
                     transitions.setdefault(current_state, {})[symbol] = next_state
                 else:
                     transitions.setdefault(current_state, {})[symbol] = sink
