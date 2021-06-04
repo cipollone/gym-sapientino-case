@@ -1,6 +1,7 @@
 """Gym interface."""
 
 import importlib.resources
+import os
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Optional, Sequence
@@ -15,6 +16,7 @@ from temprl.wrapper import TemporalGoalWrapper
 
 from . import resources
 from .gym_utils import SingleAgentWrapper
+from .observations import ContinuousRobotFeatures
 from .temporal_goal import SapientinoFluents, SapientinoGoal
 
 # Default arguments
@@ -38,9 +40,9 @@ class SapientinoCase(gym.Wrapper):
     def __init__(
         self,
         colors: Sequence[str],
-        params: Optional[dict] = None,
+        params=None,
         map_file: Optional[Path] = None,
-        logdir: Optional[Path] = None,
+        logdir: Optional[str] = None,
     ):
         """Initialize.
 
@@ -55,11 +57,9 @@ class SapientinoCase(gym.Wrapper):
         # Defaults
         if params is None:
             params = _sapientino_defaults
-        if map_file is None:
-            map_file = importlib.resources.path(resources, "map1.txt")
 
         # Instantiate gym sapientino
-        env = self._make_sapientino(params)
+        env = self._make_sapientino(params, map_file)
 
         # Define the fluent extractor
         fluents = SapientinoFluents(set(colors))
@@ -69,7 +69,7 @@ class SapientinoCase(gym.Wrapper):
             colors=colors,
             fluents=fluents,
             reward=params["tg_reward"],
-            save_to=logdir / "reward-dfa.dot" if logdir else None,
+            save_to=os.path.join(logdir, "reward-dfa.dot") if logdir else None,
         )
 
         # Add rewards of the temporal goal to the environment
@@ -78,12 +78,15 @@ class SapientinoCase(gym.Wrapper):
             temp_goals=[tg],
         )
 
+        # Choose a specific observation space
+        env = ContinuousRobotFeatures(env)
+
         # Save
         super().__init__(env)
 
     @staticmethod
     def _make_sapientino(
-        params: Optional[dict] = None,
+        params=None,
         map_file: Optional[Path] = None,
     ) -> gym.Env:
         """Create the sapientino environment with some map."""

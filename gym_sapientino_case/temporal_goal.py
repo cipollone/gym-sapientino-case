@@ -45,7 +45,7 @@ class SapientinoFluents:
                     raise RuntimeError("Unexpected color: " + color_name)
                 true_fluents = {color_name}
 
-        return {f: f in true_fluents for f in self.fluents}
+        return frozenset({f for f in self.fluents if f in true_fluents})
 
 
 class SapientinoGoal(TemporalGoal):
