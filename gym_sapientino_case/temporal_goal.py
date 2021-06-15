@@ -1,12 +1,12 @@
 """Definitions on the sapientino environment, and fluents valuation."""
 
-from typing import Dict, Optional, Sequence, Set
+from typing import Dict, List, Optional, Sequence, Set
 
+from gym import Env
 from gym.spaces import Discrete
 from gym_sapientino.core.types import color2int as enum_color2int
 from pythomata.impl.simple import SimpleDFA
-from pythomata.utils import powerset
-from temprl.wrapper import TemporalGoal
+from temprl.wrapper import TemporalGoal, TemporalGoalWrapper
 
 # These mappings are often useful (from colors to ID and vice versa)
 color2int = {c.value: i for c, i in enum_color2int.items()}
@@ -55,7 +55,7 @@ class SapientinoGoal(TemporalGoal):
     The goal is to visit all the given colors (these are positions in
     the environments) in some fixed order.
 
-    Rigth not, just for efficiency, the automaton is defined directly and not
+    Right now, just for efficiency, the automaton is defined directly and not
     built from a temporal formula.
     """
 
@@ -81,6 +81,8 @@ class SapientinoGoal(TemporalGoal):
 
         # Make automaton for this sequence
         automaton = self._make_sapientino_automaton(colors)
+
+        automaton = automaton.renumbering()
 
         # Super
         TemporalGoal.__init__(
@@ -140,3 +142,51 @@ class SapientinoGoal(TemporalGoal):
         if we already have a complete automaton.
         """
         return Discrete(len(self._automaton.states))
+
+
+class MyTemporalGoalWrapper(TemporalGoalWrapper):
+    """Custom version of TemporalGoalWrapper."""
+
+    def __init__(
+        self,
+        env: Env,
+        temp_goals: List[TemporalGoal],
+        end_on_success: bool = True,
+        end_on_failure: bool = False,
+    ):
+        """Initialize.
+
+        :param env: gym environment to wrap.
+        :param temp_goals: list of temporal goals.
+        :param end_on_success: if true, episode terminates when the agent
+            reaches the reward.
+        :param end_on_failure: if true, episode terminates when the agent
+            reaches a failure state.
+        """
+        # Super
+        TemporalGoalWrapper.__init__(self, env=env, temp_goals=temp_goals)
+
+        # Store
+        self.__end_on_success = end_on_success
+        self.__end_on_failure = end_on_failure
+
+    def step(self, action):
+        """Do the step."""
+        # Step
+        state, reward, done, info = super().step(action)
+
+        # Reward
+        for tg in self.temp_goals:
+            if tg.is_true():
+                reward += tg.reward
+
+        # Termination
+        failure_done = self.__end_on_failure and all(
+            tg.is_failed() for tg in self.temp_goals
+        )
+        success_done = self.__end_on_success and all(
+            tg.is_true() for tg in self.temp_goals
+        )
+        done = done or failure_done or success_done
+
+        return state, reward, done, info

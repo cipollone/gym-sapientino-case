@@ -12,12 +12,11 @@ from gym_sapientino.core.configurations import (
     SapientinoAgentConfiguration,
     SapientinoConfiguration,
 )
-from temprl.wrapper import TemporalGoalWrapper
 
 from . import resources
 from .gym_utils import SingleAgentWrapper
 from .observations import ContinuousRobotFeatures
-from .temporal_goal import SapientinoFluents, SapientinoGoal
+from .temporal_goal import MyTemporalGoalWrapper, SapientinoFluents, SapientinoGoal
 
 # Default arguments
 _sapientino_defaults = dict(
@@ -73,7 +72,7 @@ class SapientinoCase(gym.Wrapper):
         )
 
         # Add rewards of the temporal goal to the environment
-        env = TemporalGoalWrapper(
+        env = MyTemporalGoalWrapper(
             env=env,
             temp_goals=[tg],
         )
