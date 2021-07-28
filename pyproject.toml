@@ -1,13 +1,14 @@
 [tool.poetry]
 name = "gym-sapientino-case"
-version = "0.1.0"
+version = "0.2.0"
 description = "A specific environment instance created from gym-sapientino"
 authors = ["Roberto Cipollone <cipollone.rt@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
-gym-sapientino = { git = "https://github.com/whitemech/gym-sapientino.git", branch = "multinav-experiments" }
-temprl = { git = "https://github.com/whitemech/temprl.git", branch = "multinav" }
+gym-sapientino = { git = "https://github.com/whitemech/gym-sapientino.git", branch = "data-workaround" }
+temprl = { git = "https://github.com/whitemech/temprl.git", branch = "develop" }
+logaut = "^0.1.1"
 
 [tool.poetry.dev-dependencies]
 ipython = "^7.22.0"

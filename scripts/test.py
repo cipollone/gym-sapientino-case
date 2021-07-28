@@ -2,6 +2,7 @@
 
 import random
 import time
+import argparse
 
 from gym.wrappers import TimeLimit
 
@@ -9,11 +10,15 @@ from gym_sapientino_case.env import SapientinoCase
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--interactive", action="store_true")
+    args = parser.parse_args()
+
+
     """Just visualizes a random exploration of the environment."""
     # Define the environment
     #   NOTE: this uses the defaults, but you can experiments with all options
     env = SapientinoCase(
-        colors=["red", "green", "blue", "yellow"],
         logdir=".",
     )
 
@@ -35,8 +40,20 @@ def main():
             # Render
             env.render()
 
-            # Compute action (random here)
-            action = random.randint(0, env.action_space.n - 1)
+            # Compute action
+            if args.interactive:
+                try:
+                    action = int(input("Next action: "))
+                    if action < 0:
+                        print("Reset")
+                        env.reset()
+                        continue
+                    if action >= env.action_space.n:
+                        continue
+                except ValueError:
+                    continue
+            else:
+                action = random.randint(0, env.action_space.n - 1)
 
             # Move env
             obs, reward, done, _ = env.step(action)

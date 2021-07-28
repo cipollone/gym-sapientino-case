@@ -1,36 +1,34 @@
 """Gym interface."""
 
-import importlib.resources
-import os
-from contextlib import nullcontext
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional, cast
 
 import gym
 from gym_sapientino import SapientinoDictSpace
+from gym_sapientino.core import types as sapientino_types
+from gym_sapientino.core.actions import ContinuousCommand
 from gym_sapientino.core.configurations import (
     SapientinoAgentConfiguration,
     SapientinoConfiguration,
 )
+from gym_sapientino.wrappers import observations
+from gym_sapientino.wrappers.gym import SingleAgentWrapper
+from logaut import ldl2dfa
+from pylogics.parsers import parse_ldl
+from pythomata.core import Rendering as RenderingDFA
+from temprl.wrapper import TemporalGoal, TemporalGoalWrapper
 
-from . import resources
-from .gym_utils import SingleAgentWrapper
-from .observations import ContinuousRobotFeatures
-from .temporal_goal import MyTemporalGoalWrapper, SapientinoFluents, SapientinoGoal
-
-# Default arguments
-_sapientino_defaults = dict(
-    reward_per_step=0.0,
-    reward_outside_grid=0.0,
-    reward_duplicate_beep=0.0,
-    acceleration=0.2,
-    angular_acceleration=10.0,
-    max_velocity=0.4,
-    min_velocity=0.0,
-    max_angular_vel=40,
-    initial_position=[2, 2],
-    tg_reward=1.0,
-)
+# One map
+_default_map = """\
+|                 |
+|  r g b     r    |
+|                 |
+|                 |
+|###########      |
+|                 |
+|                 |
+|  g         b    |
+|                 |"""
 
 
 class SapientinoCase(gym.Wrapper):
@@ -38,9 +36,8 @@ class SapientinoCase(gym.Wrapper):
 
     def __init__(
         self,
-        colors: Sequence[str],
-        params=None,
-        map_file: Optional[Path] = None,
+        conf: SapientinoConfiguration = None,
+        reward_ldlf: Optional[str] = None,
         logdir: Optional[str] = None,
     ):
         """Initialize.
@@ -48,75 +45,91 @@ class SapientinoCase(gym.Wrapper):
         :param colors: the temporal goal is to visit these colors in the
             correct order.
         :params params: a dictionary of environment parameters.
-            see this module source code: there are defaults as reference.
-        :params map_file: path to a map file. See this package resource file
-            for an example of a map.
+            See defaults defined in this function as an example.
+        :param reward_ldlf: a LDLf temporal goal formula to generate +1 reward.
         :param logdir: where to save logs.
         """
-        # Defaults
-        if params is None:
-            params = _sapientino_defaults
+        # Use defaults if a configuration not given. Best not to rely on this
+        if conf is None:
+            agent_conf = SapientinoAgentConfiguration(
+                initial_position=(2, 2),
+                commands=ContinuousCommand,
+                angular_speed=30.0,
+                acceleration=0.10,
+                max_velocity=0.40,
+                min_velocity=0.0,
+            )
 
-        # Instantiate gym sapientino
-        env = self._make_sapientino(params, map_file)
+            conf = SapientinoConfiguration(
+                agent_configs=(agent_conf,),
+                grid_map=_default_map,
+                reward_outside_grid=0.0,
+                reward_duplicate_beep=0.0,
+                reward_per_step=0.0,
+            )
 
-        # Define the fluent extractor
-        fluents = SapientinoFluents(set(colors))
+        # Instantiate the environment
+        env = SapientinoDictSpace(configuration=conf)
 
-        # Define the temporal goal
-        tg = SapientinoGoal(
-            colors=colors,
-            fluents=fluents,
-            reward=params["tg_reward"],
-            save_to=os.path.join(logdir, "reward-dfa.dot") if logdir else None,
-        )
-
-        # Add rewards of the temporal goal to the environment
-        env = MyTemporalGoalWrapper(
+        # Choose an observation space
+        env = observations.UseFeatures(
             env=env,
-            temp_goals=[tg],
+            features=[observations.ContinuousFeatures],
         )
+        env_with_features = env
+        env = SingleAgentWrapper(env)
 
-        # Choose a specific observation space
-        env = ContinuousRobotFeatures(env)
+        # Default temporal goal
+        if reward_ldlf is None:
+            no_color_star = "(!red & !green & !blue)*"
+            reward_ldlf = (
+                "<" +
+                no_color_star + "; red; " +
+                no_color_star + "; green; " +
+                no_color_star + "; blue>end"
+            )
+
+        # Automaton and composition
+        print("> Parsing LDLf")
+        dfa = ldl2dfa(parse_ldl(reward_ldlf))
+        if logdir is not None:
+            RenderingDFA.to_graphviz(cast(RenderingDFA, dfa)).render(
+                Path(logdir) / "reward-dfa.dot", format="pdf")
+        print("> Parsed")
+
+        env = TemporalGoalWrapper(
+            env=env,
+            temp_goals=[
+                TemporalGoal(
+                    reward=1.0,
+                    automaton=dfa,
+                )],
+            fluent_extractor=ColorExtractor(env_with_features),
+        )
 
         # Save
         super().__init__(env)
 
-    @staticmethod
-    def _make_sapientino(
-        params=None,
-        map_file: Optional[Path] = None,
-    ) -> gym.Env:
-        """Create the sapientino environment with some map."""
-        # Define the robot
-        agent_configuration = SapientinoAgentConfiguration(
-            continuous=True,
-            initial_position=params["initial_position"],
-        )
 
-        # Maybe I need to open the default map
-        if map_file is not None:
-            map_context = nullcontext(map_file)
+class ColorExtractor:
+    """A fluent extractor for this environment."""
+
+    def __init__(self, env: observations.UseFeatures):
+        """Initialize.
+
+        :param env: a wrapped gym sapientino environment with one agent.
+        """
+        self.env = env
+
+        # Transform color id to colors
+        self._int2color = {i: str(c) for c, i in sapientino_types.color2int.items()}
+
+    def __call__(self, observation, action):  # type: ignore
+        """Fluent extractor."""
+        assert len(self.env.last_dict_observation) == 1
+        obs = self.env.last_dict_observation[0]
+        color = self._int2color[obs["color"]]
+        if color == "blank" or ContinuousCommand(action) != ContinuousCommand.BEEP:
+            return frozenset()
         else:
-            map_context = importlib.resources.path(resources, "map1.txt")
-
-        # Define the environment
-        with map_context as map_path:
-            configuration = SapientinoConfiguration(
-                [agent_configuration],
-                path_to_map=map_path,
-                reward_per_step=params["reward_per_step"],
-                reward_outside_grid=params["reward_outside_grid"],
-                reward_duplicate_beep=params["reward_duplicate_beep"],
-                acceleration=params["acceleration"],
-                angular_acceleration=params["angular_acceleration"],
-                max_velocity=params["max_velocity"],
-                min_velocity=params["min_velocity"],
-                max_angular_vel=params["max_angular_vel"],
-            )
-
-        # Observation space
-        env = SingleAgentWrapper(SapientinoDictSpace(configuration))
-
-        return env
+            return frozenset({color})
