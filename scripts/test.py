@@ -10,12 +10,12 @@ from gym_sapientino_case.env import SapientinoCase
 
 
 def main():
+    """Just visualizes a random exploration of the environment."""
+    # One option
     parser = argparse.ArgumentParser()
-    parser.add_argument("--interactive", action="store_true")
+    parser.add_argument("-i", "--interactive", action="store_true")
     args = parser.parse_args()
 
-
-    """Just visualizes a random exploration of the environment."""
     # Define the environment
     #   NOTE: this uses the defaults, but you can experiments with all options
     env = SapientinoCase(
