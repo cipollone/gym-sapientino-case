@@ -20,15 +20,12 @@ from temprl.wrapper import TemporalGoal, TemporalGoalWrapper
 
 # One map
 _default_map = """\
-|                 |
-|  r g b     r    |
-|                 |
-|                 |
-|###########      |
-|                 |
-|                 |
-|  g         b    |
-|                 |"""
+|           |
+|     b     |
+|     #     |
+|  r  # g   |
+|     #     |
+|###########|"""
 
 
 class SapientinoCase(gym.Wrapper):
@@ -81,13 +78,7 @@ class SapientinoCase(gym.Wrapper):
 
         # Default temporal goal
         if reward_ldlf is None:
-            no_color_star = "(!red & !green & !blue)*"
-            reward_ldlf = (
-                "<" +
-                no_color_star + "; red; " +
-                no_color_star + "; green; " +
-                no_color_star + "; blue>end"
-            )
+            reward_ldlf = "<!red*; red; !green*; green; !blue*; blue>end"
 
         # Automaton and composition
         print("> Parsing LDLf")
@@ -129,7 +120,8 @@ class ColorExtractor:
         assert len(self.env.last_dict_observation) == 1
         obs = self.env.last_dict_observation[0]
         color = self._int2color[obs["color"]]
-        if color == "blank" or ContinuousCommand(action) != ContinuousCommand.BEEP:
+        if (color == "blank" or action is None or
+                ContinuousCommand(action) != ContinuousCommand.BEEP):
             return frozenset()
         else:
             return frozenset({color})
