@@ -39,10 +39,8 @@ class SapientinoCase(gym.Wrapper):
     ):
         """Initialize.
 
-        :param colors: the temporal goal is to visit these colors in the
-            correct order.
-        :params params: a dictionary of environment parameters.
-            See defaults defined in this function as an example.
+        :param conf: an environment configuration; see the
+            SapientinoConfiguration class.
         :param reward_ldlf: a LDLf temporal goal formula to generate +1 reward.
         :param logdir: where to save logs.
         """
